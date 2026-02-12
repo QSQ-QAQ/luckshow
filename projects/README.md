@@ -296,6 +296,40 @@ export default function ClientComponent() {
 
 ## 常见开发场景
 
+### 开发者上传图片（非用户上传）
+
+本项目的图片由开发者维护，不提供终端用户上传入口。
+
+1. 将图片文件放到 `public/images/`（可按业务再分子目录）
+2. 在 `public/images/gallery.json` 配置图片信息：分组 `category`、分组 `description`、分组 `updatedAt`
+3. 每个图片项配置 `id`、`name`、`coverUrl`、`uploadedAt`、`shots`（用于详情页多角度展示）
+4. 详情页路由为 `/gallery/[id]`，首页和详情页都按 `gallery.json` 自动渲染
+5. 保存后页面会热更新，刷新即可看到新图片
+
+`public/images/gallery.json` 示例结构：
+
+```json
+{
+  "updatedAt": "2026/02/12",
+  "groups": [
+    {
+      "category": "盘子",
+      "description": "盘子款式展示",
+      "updatedAt": "2026/02/12",
+      "images": [
+        {
+          "id": "plate-001",
+          "name": "盘子",
+          "coverUrl": "/images/00001.jpg",
+          "uploadedAt": "2026/02/04",
+          "shots": ["/images/00001.jpg"]
+        }
+      ]
+    }
+  ]
+}
+```
+
 ### 添加新页面
 
 1. 在 `src/app/` 下创建文件夹和 `page.tsx`

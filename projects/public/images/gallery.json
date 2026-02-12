@@ -1,0 +1,37 @@
+{
+  "updatedAt": "2026/02/12",
+  "groups": [
+    {
+      "category": "蜡笔小新",
+      "description": "蜡笔小新展示",
+      "updatedAt": "2026/02/12",
+      "images": [
+        {
+          "id": "plate-001",
+          "name": "左卫门",
+          "coverUrl": "/images/00001.png",
+          "uploadedAt": "2026/02/04",
+          "description": "左卫门展示",
+          "shots": [
+            "/images/00001.png",
+            "/images/00002.png",
+            "/images/00003.png"
+          ]
+        },
+        {
+          "id": "plate-002",
+          "name": "小新",
+          "coverUrl": "/images/00011.png",
+          "uploadedAt": "2026/02/08",
+          "description": "小新展示",
+          "shots": [
+            "/images/00011.png",
+            "/images/00012.png",
+            "/images/00013.png",
+            "/images/00014.png"
+          ]
+        }
+      ]
+    }
+  ]
+}

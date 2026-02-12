@@ -1,37 +1,110 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import {
+  EMPTY_GALLERY_CONFIG,
+  flattenGalleryImages,
+  GalleryConfig,
+  GalleryImageItem,
+  getGalleryCategories,
+  toSortableDateValue,
+} from '@/lib/gallery';
 
-// 模拟图片数据
-const mockImages = [
-  { id: 1, name: '产品展示图1', category: '产品图', url: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop' },
-  { id: 2, name: '团队合影', category: '团队照', url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=400&fit=crop' },
-  { id: 3, name: '办公环境1', category: '环境照', url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop' },
-  { id: 4, name: '产品展示图2', category: '产品图', url: 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400&h=400&fit=crop' },
-  { id: 5, name: '办公环境2', category: '环境照', url: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?w=400&h=400&fit=crop' },
-  { id: 6, name: '活动照片', category: '活动照', url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=400&h=400&fit=crop' },
-  { id: 7, name: '产品展示图3', category: '产品图', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop' },
-  { id: 8, name: '团队照片2', category: '团队照', url: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=400&fit=crop' },
-];
+type SortMode = 'time-desc' | 'time-asc' | 'name-asc' | 'name-desc' | 'heat';
 
-const categories = ['全部图片', '产品图', '团队照', '环境照', '活动照'];
+const CLICK_STORAGE_KEY = 'gallery-click-counts';
 
 export default function GalleryPage() {
   const [selectedCategory, setSelectedCategory] = useState('全部图片');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filteredImages, setFilteredImages] = useState(mockImages);
+  const [galleryConfig, setGalleryConfig] = useState<GalleryConfig>(EMPTY_GALLERY_CONFIG);
+  const [filteredImages, setFilteredImages] = useState<GalleryImageItem[]>([]);
+  const [allImages, setAllImages] = useState<GalleryImageItem[]>([]);
+  const [sortMode, setSortMode] = useState<SortMode>('time-desc');
+  const [clickCounts, setClickCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+
+  const categories = getGalleryCategories(galleryConfig);
+
+  const selectedGroup = galleryConfig.groups.find(
+    (group) => group.category === selectedCategory
+  );
+
+  const latestUpdatedAt =
+    allImages.length > 0
+      ? [...allImages]
+          .sort(
+            (leftImage, rightImage) =>
+              toSortableDateValue(rightImage.uploadedAt) -
+              toSortableDateValue(leftImage.uploadedAt)
+          )[0]?.uploadedAt || galleryConfig.updatedAt
+      : galleryConfig.updatedAt;
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadGalleryConfig = async () => {
+      try {
+        const response = await fetch('/images/gallery.json', { cache: 'no-store' });
+        if (!response.ok) {
+          return;
+        }
+        const data = (await response.json()) as GalleryConfig;
+        if (!mounted || !data?.groups) {
+          return;
+        }
+        setGalleryConfig(data);
+        setAllImages(flattenGalleryImages(data));
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setGalleryConfig(EMPTY_GALLERY_CONFIG);
+        setAllImages([]);
+      }
+    };
+
+    loadGalleryConfig();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const rawValue = localStorage.getItem(CLICK_STORAGE_KEY);
+    if (!rawValue) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(rawValue) as Record<string, number>;
+      const mapped: Record<string, number> = {};
+      for (const [id, count] of Object.entries(parsed)) {
+        if (Number.isFinite(count)) {
+          mapped[id] = count;
+        }
+      }
+      setClickCounts(mapped);
+    } catch {
+      // 忽略本地存储异常
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(CLICK_STORAGE_KEY, JSON.stringify(clickCounts));
+  }, [clickCounts]);
 
   // 根据分类和搜索过滤图片
   useEffect(() => {
     setLoading(true);
 
-    // 模拟加载延迟
     setTimeout(() => {
-      let filtered = mockImages;
+      let filtered = allImages;
 
       // 分类筛选
       if (selectedCategory !== '全部图片') {
@@ -45,13 +118,54 @@ export default function GalleryPage() {
         );
       }
 
-      setFilteredImages(filtered);
+      const sorted = [...filtered].sort((leftImage, rightImage) => {
+        if (sortMode === 'name-asc') {
+          return leftImage.name.localeCompare(rightImage.name, 'zh-CN');
+        }
+
+        if (sortMode === 'name-desc') {
+          return rightImage.name.localeCompare(leftImage.name, 'zh-CN');
+        }
+
+        if (sortMode === 'heat') {
+          const leftHeat = clickCounts[leftImage.id] ?? 0;
+          const rightHeat = clickCounts[rightImage.id] ?? 0;
+          if (rightHeat !== leftHeat) {
+            return rightHeat - leftHeat;
+          }
+          return leftImage.name.localeCompare(rightImage.name, 'zh-CN');
+        }
+
+        const leftTime = toSortableDateValue(leftImage.uploadedAt);
+        const rightTime = toSortableDateValue(rightImage.uploadedAt);
+        if (leftTime !== rightTime) {
+          return sortMode === 'time-desc'
+            ? rightTime - leftTime
+            : leftTime - rightTime;
+        }
+        return leftImage.name.localeCompare(rightImage.name, 'zh-CN');
+      });
+
+      setFilteredImages(sorted);
       setLoading(false);
     }, 300);
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, allImages, sortMode, clickCounts]);
+
+  useEffect(() => {
+    if (selectedCategory !== '全部图片' && !categories.includes(selectedCategory)) {
+      setSelectedCategory('全部图片');
+    }
+  }, [categories, selectedCategory]);
 
   const handleSearch = () => {
     // 搜索按钮点击时触发，实际逻辑已经在 useEffect 中处理
+  };
+
+  const handleImageClick = (imageId: string) => {
+    setClickCounts((previous) => ({
+      ...previous,
+      [imageId]: (previous[imageId] ?? 0) + 1,
+    }));
   };
 
   return (
@@ -77,15 +191,25 @@ export default function GalleryPage() {
             </Button>
           ))}
         </div>
+        {selectedGroup ? (
+          <div className="mt-2 text-xs text-gray-500">
+            <p>{selectedGroup.description}</p>
+            <p>分组更新：{selectedGroup.updatedAt}</p>
+          </div>
+        ) : (
+          <div className="mt-2 text-xs text-gray-500">
+            最近更新时间：{latestUpdatedAt}
+          </div>
+        )}
       </div>
 
       {/* 搜索区 */}
       <div className="bg-white border-b px-4 py-3 shadow-sm">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Input
             type="text"
             placeholder="搜索图片名称..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="min-w-48 flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -100,6 +224,17 @@ export default function GalleryPage() {
           >
             搜索
           </Button>
+          <select
+            className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+          >
+            <option value="time-desc">时间（大到小）</option>
+            <option value="time-asc">时间（小到大）</option>
+            <option value="name-asc">名字（A-Z）</option>
+            <option value="name-desc">名字（Z-A）</option>
+            <option value="heat">热度</option>
+          </select>
         </div>
       </div>
 
@@ -121,22 +256,31 @@ export default function GalleryPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {filteredImages.map((image) => (
-              <Card key={image.id} className="overflow-hidden shadow-md hover:shadow-lg transition-shadow">
-                <div className="aspect-square">
-                  <img
-                    src={image.url}
-                    alt={image.name}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-                <div className="p-3">
-                  <h3 className="text-sm font-medium text-gray-900 truncate">
-                    {image.name}
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-1">{image.category}</p>
-                </div>
-              </Card>
+              <Link
+                key={image.id}
+                href={`/gallery/${encodeURIComponent(image.id)}`}
+                onClick={() => handleImageClick(image.id)}
+              >
+                <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer">
+                  <div className="aspect-square">
+                    <img
+                      src={image.coverUrl}
+                      alt={image.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="p-3">
+                    <h3 className="text-sm font-medium text-gray-900 truncate">
+                      {image.name}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">{image.uploadedAt}</p>
+                    {(clickCounts[image.id] ?? 0) >= 10 ? (
+                      <p className="text-xs text-gray-400 mt-1">热度：{clickCounts[image.id] ?? 0}</p>
+                    ) : null}
+                  </div>
+                </Card>
+              </Link>
             ))}
           </div>
         )}
