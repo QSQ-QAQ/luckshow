@@ -9,6 +9,7 @@ import {
   EMPTY_GALLERY_CONFIG,
   flattenGalleryImages,
   GALLERY_ADMIN_STORAGE_KEY,
+  GALLERY_CLICK_STORAGE_KEY,
   GalleryConfig,
   GalleryImageItem,
   getGalleryCategories,
@@ -17,8 +18,6 @@ import {
 } from '@/lib/gallery';
 
 type SortMode = 'time-desc' | 'time-asc' | 'name-asc' | 'name-desc' | 'heat';
-
-const CLICK_STORAGE_KEY = 'gallery-click-counts';
 
 export default function GalleryPage() {
   const [selectedCategory, setSelectedCategory] = useState('全部图片');
@@ -90,28 +89,43 @@ export default function GalleryPage() {
   }, []);
 
   useEffect(() => {
-    const rawValue = localStorage.getItem(CLICK_STORAGE_KEY);
-    if (!rawValue) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as Record<string, number>;
-      const mapped: Record<string, number> = {};
-      for (const [id, count] of Object.entries(parsed)) {
-        if (Number.isFinite(count)) {
-          mapped[id] = count;
-        }
+    const loadClickCounts = () => {
+      const rawValue = localStorage.getItem(GALLERY_CLICK_STORAGE_KEY);
+      if (!rawValue) {
+        setClickCounts({});
+        return;
       }
-      setClickCounts(mapped);
-    } catch {
-      // 忽略本地存储异常
-    }
-  }, []);
 
-  useEffect(() => {
-    localStorage.setItem(CLICK_STORAGE_KEY, JSON.stringify(clickCounts));
-  }, [clickCounts]);
+      try {
+        const parsed = JSON.parse(rawValue) as Record<string, number>;
+        const mapped: Record<string, number> = {};
+        for (const [id, count] of Object.entries(parsed)) {
+          if (Number.isFinite(count)) {
+            mapped[id] = count;
+          }
+        }
+        setClickCounts(mapped);
+      } catch {
+        setClickCounts({});
+      }
+    };
+
+    loadClickCounts();
+
+    const handleFocus = () => loadClickCounts();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadClickCounts();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // 根据分类和搜索过滤图片
   useEffect(() => {
@@ -173,13 +187,6 @@ export default function GalleryPage() {
 
   const handleSearch = () => {
     // 搜索按钮点击时触发，实际逻辑已经在 useEffect 中处理
-  };
-
-  const handleImageClick = (imageId: string) => {
-    setClickCounts((previous) => ({
-      ...previous,
-      [imageId]: (previous[imageId] ?? 0) + 1,
-    }));
   };
 
   return (
@@ -276,10 +283,9 @@ export default function GalleryPage() {
               <Link
                 key={image.id}
                 href={`/gallery/${encodeURIComponent(image.id)}`}
-                onClick={() => handleImageClick(image.id)}
               >
-                <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer">
-                  <div className="aspect-square">
+                <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer h-full flex flex-col">
+                  <div className="aspect-[3/4]">
                     <img
                       src={image.coverUrl}
                       alt={image.name}
@@ -287,7 +293,7 @@ export default function GalleryPage() {
                       loading="lazy"
                     />
                   </div>
-                  <div className="p-3">
+                  <div className="p-3 min-h-22">
                     <h3 className="text-sm font-medium text-gray-900 truncate">
                       {image.name}
                     </h3>
@@ -295,9 +301,7 @@ export default function GalleryPage() {
                     {image.status === 'sold-out' ? (
                       <p className="text-xs text-gray-400 mt-1">已售罄</p>
                     ) : null}
-                    {(clickCounts[image.id] ?? 0) >= 10 ? (
-                      <p className="text-xs text-gray-400 mt-1">热度：{clickCounts[image.id] ?? 0}</p>
-                    ) : null}
+                    <p className="text-xs text-gray-400 mt-1">热度：{clickCounts[image.id] ?? 0}</p>
                   </div>
                 </Card>
               </Link>

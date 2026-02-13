@@ -7,6 +7,7 @@ import {
   EMPTY_GALLERY_CONFIG,
   findGalleryImageById,
   GALLERY_ADMIN_STORAGE_KEY,
+  GALLERY_CLICK_STORAGE_KEY,
   GalleryConfig,
   normalizeGalleryConfig,
 } from '@/lib/gallery';
@@ -24,6 +25,28 @@ export default function GalleryDetailPage() {
     () => findGalleryImageById(galleryConfig, imageId),
     [galleryConfig, imageId]
   );
+
+  useEffect(() => {
+    if (!imageId) {
+      return;
+    }
+
+    try {
+      const rawValue = localStorage.getItem(GALLERY_CLICK_STORAGE_KEY);
+      const parsed = rawValue ? (JSON.parse(rawValue) as Record<string, number>) : {};
+      const mapped: Record<string, number> = {};
+      for (const [id, count] of Object.entries(parsed)) {
+        if (Number.isFinite(count)) {
+          mapped[id] = count;
+        }
+      }
+
+      mapped[imageId] = (mapped[imageId] ?? 0) + 1;
+      localStorage.setItem(GALLERY_CLICK_STORAGE_KEY, JSON.stringify(mapped));
+    } catch {
+      // 忽略本地存储异常
+    }
+  }, [imageId]);
 
   useEffect(() => {
     let mounted = true;
@@ -130,20 +153,22 @@ export default function GalleryDetailPage() {
           {currentImage.shots.length <= 1 ? (
             <p className="mt-2 text-xs text-white/70">当前图片暂无其他方向照片。</p>
           ) : (
-            <div className="mt-2 grid grid-cols-3 md:grid-cols-5 gap-2">
+            <div className="mt-2 grid grid-cols-10 md:grid-cols-14 gap-1">
               {currentImage.shots.map((shotUrl, index) => (
                 <button
                   key={`${shotUrl}-${index}`}
                   type="button"
                   onClick={() => setActiveUrl(shotUrl)}
-                  className={`overflow-hidden rounded-md border ${
-                    activeUrl === shotUrl ? 'border-white' : 'border-white/20'
+                  className={`overflow-hidden rounded-md border aspect-[3/4] transition ${
+                    activeUrl === shotUrl
+                      ? 'border-2 border-white ring-2 ring-white/40'
+                      : 'border-white/20 hover:border-white/50'
                   }`}
                 >
                   <img
                     src={shotUrl}
                     alt={`${currentImage.name}-${index + 1}`}
-                    className="h-24 w-full object-cover"
+                    className="h-full w-full object-cover"
                     loading="lazy"
                   />
                 </button>

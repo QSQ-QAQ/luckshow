@@ -12,6 +12,7 @@ export interface GalleryImage {
 export type GalleryImageStatus = 'on' | 'off' | 'sold-out';
 
 export const GALLERY_ADMIN_STORAGE_KEY = 'gallery-admin-config-v1';
+export const GALLERY_CLICK_STORAGE_KEY = 'gallery-click-counts';
 
 export interface GalleryGroup {
   category: string;
