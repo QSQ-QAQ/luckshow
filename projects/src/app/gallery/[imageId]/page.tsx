@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import {
   EMPTY_GALLERY_CONFIG,
   findGalleryImageById,
+  GALLERY_ADMIN_STORAGE_KEY,
   GalleryConfig,
+  normalizeGalleryConfig,
 } from '@/lib/gallery';
 
 export default function GalleryDetailPage() {
@@ -38,7 +40,18 @@ export default function GalleryDetailPage() {
           return;
         }
 
-        setGalleryConfig(data);
+        const normalized = normalizeGalleryConfig(data);
+        const rawOverride = localStorage.getItem(GALLERY_ADMIN_STORAGE_KEY);
+        let effectiveConfig = normalized;
+        if (rawOverride) {
+          try {
+            effectiveConfig = normalizeGalleryConfig(JSON.parse(rawOverride) as GalleryConfig);
+          } catch {
+            effectiveConfig = normalized;
+          }
+        }
+
+        setGalleryConfig(effectiveConfig);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -97,6 +110,9 @@ export default function GalleryDetailPage() {
           <div className="text-right">
             <p className="text-sm font-medium">{currentImage.name}</p>
             <p className="text-xs text-white/70">上传日期：{currentImage.uploadedAt}</p>
+            {currentImage.status === 'sold-out' ? (
+              <p className="text-xs text-white/70">状态：已售罄</p>
+            ) : null}
           </div>
         </div>
       </header>

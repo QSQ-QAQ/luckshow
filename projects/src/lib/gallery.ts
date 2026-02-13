@@ -6,7 +6,12 @@ export interface GalleryImage {
   shots?: string[];
   description?: string;
   url?: string;
+  status?: GalleryImageStatus;
 }
+
+export type GalleryImageStatus = 'on' | 'off' | 'sold-out';
+
+export const GALLERY_ADMIN_STORAGE_KEY = 'gallery-admin-config-v1';
 
 export interface GalleryGroup {
   category: string;
@@ -30,6 +35,7 @@ export interface GalleryImageItem {
   description?: string;
   groupDescription: string;
   groupUpdatedAt: string;
+  status: GalleryImageStatus;
 }
 
 export const EMPTY_GALLERY_CONFIG: GalleryConfig = {
@@ -71,6 +77,28 @@ function normalizeShots(image: GalleryImage): string[] {
   return Array.from(new Set(merged));
 }
 
+export function normalizeImageStatus(status?: string): GalleryImageStatus {
+  if (status === 'off' || status === 'sold-out') {
+    return status;
+  }
+  return 'on';
+}
+
+export function normalizeGalleryConfig(config: GalleryConfig): GalleryConfig {
+  return {
+    updatedAt: normalizeDateString(config.updatedAt),
+    groups: config.groups.map((group) => ({
+      ...group,
+      updatedAt: normalizeDateString(group.updatedAt),
+      images: group.images.map((image) => ({
+        ...image,
+        uploadedAt: normalizeDateString(image.uploadedAt || group.updatedAt || config.updatedAt),
+        status: normalizeImageStatus(image.status),
+      })),
+    })),
+  };
+}
+
 export function flattenGalleryImages(config: GalleryConfig): GalleryImageItem[] {
   return config.groups.flatMap((group) =>
     group.images.map((image) => {
@@ -85,6 +113,7 @@ export function flattenGalleryImages(config: GalleryConfig): GalleryImageItem[] 
         description: image.description,
         groupDescription: group.description,
         groupUpdatedAt: normalizeDateString(group.updatedAt),
+        status: normalizeImageStatus(image.status),
       };
     })
   );

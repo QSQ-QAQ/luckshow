@@ -8,9 +8,11 @@ import { Card } from '@/components/ui/card';
 import {
   EMPTY_GALLERY_CONFIG,
   flattenGalleryImages,
+  GALLERY_ADMIN_STORAGE_KEY,
   GalleryConfig,
   GalleryImageItem,
   getGalleryCategories,
+  normalizeGalleryConfig,
   toSortableDateValue,
 } from '@/lib/gallery';
 
@@ -57,8 +59,20 @@ export default function GalleryPage() {
         if (!mounted || !data?.groups) {
           return;
         }
-        setGalleryConfig(data);
-        setAllImages(flattenGalleryImages(data));
+
+        const normalized = normalizeGalleryConfig(data);
+        const rawOverride = localStorage.getItem(GALLERY_ADMIN_STORAGE_KEY);
+        let effectiveConfig = normalized;
+        if (rawOverride) {
+          try {
+            effectiveConfig = normalizeGalleryConfig(JSON.parse(rawOverride) as GalleryConfig);
+          } catch {
+            effectiveConfig = normalized;
+          }
+        }
+
+        setGalleryConfig(effectiveConfig);
+        setAllImages(flattenGalleryImages(effectiveConfig));
       } catch {
         if (!mounted) {
           return;
@@ -104,7 +118,7 @@ export default function GalleryPage() {
     setLoading(true);
 
     setTimeout(() => {
-      let filtered = allImages;
+      let filtered = allImages.filter((image) => image.status !== 'off');
 
       // 分类筛选
       if (selectedCategory !== '全部图片') {
@@ -172,8 +186,11 @@ export default function GalleryPage() {
     <div className="min-h-screen bg-gray-50">
       {/* 分类筛选区 */}
       <div className="bg-white border-b px-4 py-3 shadow-sm">
-        <div className="mb-2">
+        <div className="mb-2 flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-gray-700">选择分类</span>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin">店主管理台</Link>
+          </Button>
         </div>
         <div className="flex flex-wrap gap-2">
           {categories.map((category) => (
@@ -275,6 +292,9 @@ export default function GalleryPage() {
                       {image.name}
                     </h3>
                     <p className="text-xs text-gray-500 mt-1">{image.uploadedAt}</p>
+                    {image.status === 'sold-out' ? (
+                      <p className="text-xs text-gray-400 mt-1">已售罄</p>
+                    ) : null}
                     {(clickCounts[image.id] ?? 0) >= 10 ? (
                       <p className="text-xs text-gray-400 mt-1">热度：{clickCounts[image.id] ?? 0}</p>
                     ) : null}
