@@ -13,7 +13,6 @@ import {
   GalleryConfig,
   GalleryImageItem,
   getGalleryCategories,
-  normalizeGalleryConfig,
   toSortableDateValue,
 } from '@/lib/gallery';
 
@@ -110,23 +109,22 @@ export function GalleryContent() {
   useEffect(() => {
     let mounted = true;
 
-    const loadGalleryConfig = async () => {
+    const loadGalleryData = async () => {
       try {
-        const response = await fetch('/gallery.json', { cache: 'no-store' });
+        const response = await fetch('/api/gallery-data', { cache: 'no-store' });
         if (!response.ok) {
           if (mounted) {
             setGalleryLoaded(true);
           }
           return;
         }
-        const data = (await response.json()) as GalleryConfig;
-        if (!mounted || !data?.groups) {
+        const data = await response.json();
+        if (!mounted || !data?.config) {
           return;
         }
 
-        const normalized = normalizeGalleryConfig(data);
-        setGalleryConfig(normalized);
-        setAllImages(flattenGalleryImages(normalized));
+        setGalleryConfig(data.config);
+        setAllImages(data.images);
         setGalleryLoaded(true);
       } catch {
         if (!mounted) {
@@ -138,7 +136,7 @@ export function GalleryContent() {
       }
     };
 
-    loadGalleryConfig();
+    loadGalleryData();
 
     return () => {
       mounted = false;
@@ -269,11 +267,11 @@ export function GalleryContent() {
 
       {/* 搜索区 */}
       <div className="bg-white border-b px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-nowrap">
           <Input
             type="text"
             placeholder="搜索图片名称..."
-            className="min-w-48 flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            className="min-w-0 flex-1 h-9 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             value={searchQuery}
             onChange={(e) => handleSearchQueryChange(e.target.value)}
             onKeyDown={(e) => {
@@ -283,13 +281,13 @@ export function GalleryContent() {
             }}
           />
           <Button
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+            className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium shrink-0"
             onClick={handleSearch}
           >
             搜索
           </Button>
           <select
-            className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
+            className="h-9 w-28 sm:w-40 rounded-md border border-input bg-transparent px-2 sm:px-3 py-1 text-sm shadow-xs shrink-0"
             value={sortMode}
             onChange={(e) => handleSortModeChange(e.target.value as SortMode)}
           >
@@ -324,7 +322,7 @@ export function GalleryContent() {
               return (
               <Link key={image.id} href={detailHref}>
                 <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer h-full flex flex-col">
-                  <div className="aspect-[3/4]">
+                  <div className="aspect-[4/5] sm:aspect-[3/4]">
                     <img
                       src={image.coverUrl}
                       alt={image.name}
@@ -332,7 +330,7 @@ export function GalleryContent() {
                       loading="lazy"
                     />
                   </div>
-                  <div className="p-3 min-h-22">
+                  <div className="p-2.5 sm:p-3 min-h-[4.5rem] sm:min-h-[5.5rem]">
                     <h3 className="text-sm font-medium text-gray-900 truncate">
                       {image.name}
                     </h3>

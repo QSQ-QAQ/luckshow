@@ -111,16 +111,18 @@ export function normalizeGalleryConfig(config: GalleryConfig): GalleryConfig {
   };
 }
 
-export function flattenGalleryImages(config: GalleryConfig): GalleryImageItem[] {
+export function flattenGalleryImages(config: GalleryConfig, heatMap?: Map<string, number>): GalleryImageItem[] {
   return config.groups.flatMap((group) =>
     group.images.map((image) => {
       const shots = normalizeShots(image);
+      const imageId = String(image.id);
+      const dbHeat = heatMap ? heatMap.get(imageId) : undefined;
       return {
-        id: String(image.id),
+        id: imageId,
         name: image.name,
         category: group.category,
         uploadedAt: normalizeDateString(image.uploadedAt || group.updatedAt || config.updatedAt),
-        heat: normalizeImageHeat(image.heat),
+        heat: dbHeat !== undefined ? dbHeat : normalizeImageHeat(image.heat),
         coverUrl: image.coverUrl || image.url || shots[0] || '',
         shots,
         description: image.description,

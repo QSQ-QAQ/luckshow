@@ -46,17 +46,17 @@ export default function GalleryDetailPage() {
 
     const loadGalleryConfig = async () => {
       try {
-        const response = await fetch('/gallery.json', { cache: 'no-store' });
+        const response = await fetch('/api/gallery-data', { cache: 'no-store' });
         if (!response.ok) {
           return;
         }
 
-        const data = (await response.json()) as GalleryConfig;
-        if (!mounted || !data?.groups) {
+        const data = await response.json();
+        if (!mounted || !data?.config?.groups) {
           return;
         }
 
-        const normalized = normalizeGalleryConfig(data);
+        const normalized = normalizeGalleryConfig(data.config);
         setGalleryConfig(normalized);
       } finally {
         if (mounted) {
