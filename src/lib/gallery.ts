@@ -2,6 +2,7 @@ export interface GalleryImage {
   id: string;
   name: string;
   uploadedAt: string;
+  heat?: number;
   coverUrl?: string;
   shots?: string[];
   description?: string;
@@ -12,7 +13,7 @@ export interface GalleryImage {
 export type GalleryImageStatus = 'on' | 'off' | 'sold-out';
 
 export const GALLERY_ADMIN_STORAGE_KEY = 'gallery-admin-config-v1';
-export const GALLERY_CLICK_STORAGE_KEY = 'gallery-click-counts';
+export const GALLERY_RETURN_PATH_STORAGE_KEY = 'gallery-return-path';
 
 export interface GalleryGroup {
   category: string;
@@ -31,6 +32,7 @@ export interface GalleryImageItem {
   name: string;
   category: string;
   uploadedAt: string;
+  heat: number;
   coverUrl: string;
   shots: string[];
   description?: string;
@@ -85,6 +87,14 @@ export function normalizeImageStatus(status?: string): GalleryImageStatus {
   return 'on';
 }
 
+export function normalizeImageHeat(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  return Math.floor(parsed);
+}
+
 export function normalizeGalleryConfig(config: GalleryConfig): GalleryConfig {
   return {
     updatedAt: normalizeDateString(config.updatedAt),
@@ -94,6 +104,7 @@ export function normalizeGalleryConfig(config: GalleryConfig): GalleryConfig {
       images: group.images.map((image) => ({
         ...image,
         uploadedAt: normalizeDateString(image.uploadedAt || group.updatedAt || config.updatedAt),
+        heat: normalizeImageHeat(image.heat),
         status: normalizeImageStatus(image.status),
       })),
     })),
@@ -109,6 +120,7 @@ export function flattenGalleryImages(config: GalleryConfig): GalleryImageItem[] 
         name: image.name,
         category: group.category,
         uploadedAt: normalizeDateString(image.uploadedAt || group.updatedAt || config.updatedAt),
+        heat: normalizeImageHeat(image.heat),
         coverUrl: image.coverUrl || image.url || shots[0] || '',
         shots,
         description: image.description,

@@ -1,15 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import {
   EMPTY_GALLERY_CONFIG,
   flattenGalleryImages,
-  GALLERY_ADMIN_STORAGE_KEY,
-  GALLERY_CLICK_STORAGE_KEY,
+  GALLERY_RETURN_PATH_STORAGE_KEY,
   GalleryConfig,
   GalleryImageItem,
   getGalleryCategories,
@@ -19,20 +19,82 @@ import {
 
 type SortMode = 'time-desc' | 'time-asc' | 'name-asc' | 'name-desc' | 'heat';
 
+const DEFAULT_CATEGORY = '全部图片';
+const DEFAULT_SORT_MODE: SortMode = 'time-desc';
+
+const isSortMode = (value: string | null): value is SortMode => {
+  return value === 'time-desc'
+    || value === 'time-asc'
+    || value === 'name-asc'
+    || value === 'name-desc'
+    || value === 'heat';
+};
+
 export default function GalleryPage() {
-  const [selectedCategory, setSelectedCategory] = useState('全部图片');
-  const [searchQuery, setSearchQuery] = useState('');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialCategoryParam = searchParams.get('category');
+  const initialSearchQueryParam = searchParams.get('q') ?? '';
+  const initialSortModeParam = searchParams.get('sort');
+
+  const [selectedCategory, setSelectedCategory] = useState(
+    initialCategoryParam && initialCategoryParam.trim()
+      ? initialCategoryParam
+      : DEFAULT_CATEGORY
+  );
+  const [searchQuery, setSearchQuery] = useState(initialSearchQueryParam);
   const [galleryConfig, setGalleryConfig] = useState<GalleryConfig>(EMPTY_GALLERY_CONFIG);
   const [filteredImages, setFilteredImages] = useState<GalleryImageItem[]>([]);
   const [allImages, setAllImages] = useState<GalleryImageItem[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>('time-desc');
-  const [clickCounts, setClickCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>(
+    isSortMode(initialSortModeParam) ? initialSortModeParam : DEFAULT_SORT_MODE
+  );
+  const [loading, setLoading] = useState(true);
+  const [galleryLoaded, setGalleryLoaded] = useState(false);
 
   const categories = getGalleryCategories(galleryConfig);
+  const effectiveSelectedCategory =
+    galleryLoaded
+      && selectedCategory !== DEFAULT_CATEGORY
+      && !categories.includes(selectedCategory)
+      ? DEFAULT_CATEGORY
+      : selectedCategory;
+
+  const buildListUrl = useCallback(
+    (nextCategory: string, nextSearchQuery: string, nextSortMode: SortMode) => {
+      const params = new URLSearchParams();
+
+      if (nextCategory !== DEFAULT_CATEGORY) {
+        params.set('category', nextCategory);
+      }
+
+      const trimmedQuery = nextSearchQuery.trim();
+      if (trimmedQuery) {
+        params.set('q', trimmedQuery);
+      }
+
+      if (nextSortMode !== DEFAULT_SORT_MODE) {
+        params.set('sort', nextSortMode);
+      }
+
+      const queryString = params.toString();
+      return queryString ? `${pathname}?${queryString}` : pathname;
+    },
+    [pathname]
+  );
+
+  const syncListStateToUrl = useCallback(
+    (nextCategory: string, nextSearchQuery: string, nextSortMode: SortMode) => {
+      router.replace(buildListUrl(nextCategory, nextSearchQuery, nextSortMode), {
+        scroll: false,
+      });
+    },
+    [buildListUrl, router]
+  );
 
   const selectedGroup = galleryConfig.groups.find(
-    (group) => group.category === selectedCategory
+    (group) => group.category === effectiveSelectedCategory
   );
 
   const latestUpdatedAt =
@@ -50,8 +112,11 @@ export default function GalleryPage() {
 
     const loadGalleryConfig = async () => {
       try {
-        const response = await fetch('/images/gallery.json', { cache: 'no-store' });
+        const response = await fetch('/gallery.json', { cache: 'no-store' });
         if (!response.ok) {
+          if (mounted) {
+            setGalleryLoaded(true);
+          }
           return;
         }
         const data = (await response.json()) as GalleryConfig;
@@ -60,24 +125,16 @@ export default function GalleryPage() {
         }
 
         const normalized = normalizeGalleryConfig(data);
-        const rawOverride = localStorage.getItem(GALLERY_ADMIN_STORAGE_KEY);
-        let effectiveConfig = normalized;
-        if (rawOverride) {
-          try {
-            effectiveConfig = normalizeGalleryConfig(JSON.parse(rawOverride) as GalleryConfig);
-          } catch {
-            effectiveConfig = normalized;
-          }
-        }
-
-        setGalleryConfig(effectiveConfig);
-        setAllImages(flattenGalleryImages(effectiveConfig));
+        setGalleryConfig(normalized);
+        setAllImages(flattenGalleryImages(normalized));
+        setGalleryLoaded(true);
       } catch {
         if (!mounted) {
           return;
         }
         setGalleryConfig(EMPTY_GALLERY_CONFIG);
         setAllImages([]);
+        setGalleryLoaded(true);
       }
     };
 
@@ -88,55 +145,14 @@ export default function GalleryPage() {
     };
   }, []);
 
-  useEffect(() => {
-    const loadClickCounts = () => {
-      const rawValue = localStorage.getItem(GALLERY_CLICK_STORAGE_KEY);
-      if (!rawValue) {
-        setClickCounts({});
-        return;
-      }
-
-      try {
-        const parsed = JSON.parse(rawValue) as Record<string, number>;
-        const mapped: Record<string, number> = {};
-        for (const [id, count] of Object.entries(parsed)) {
-          if (Number.isFinite(count)) {
-            mapped[id] = count;
-          }
-        }
-        setClickCounts(mapped);
-      } catch {
-        setClickCounts({});
-      }
-    };
-
-    loadClickCounts();
-
-    const handleFocus = () => loadClickCounts();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadClickCounts();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
   // 根据分类和搜索过滤图片
   useEffect(() => {
-    setLoading(true);
-
     setTimeout(() => {
       let filtered = allImages.filter((image) => image.status !== 'off');
 
       // 分类筛选
-      if (selectedCategory !== '全部图片') {
-        filtered = filtered.filter(img => img.category === selectedCategory);
+      if (effectiveSelectedCategory !== DEFAULT_CATEGORY) {
+        filtered = filtered.filter(img => img.category === effectiveSelectedCategory);
       }
 
       // 搜索过滤
@@ -156,8 +172,8 @@ export default function GalleryPage() {
         }
 
         if (sortMode === 'heat') {
-          const leftHeat = clickCounts[leftImage.id] ?? 0;
-          const rightHeat = clickCounts[rightImage.id] ?? 0;
+          const leftHeat = leftImage.heat;
+          const rightHeat = rightImage.heat;
           if (rightHeat !== leftHeat) {
             return rightHeat - leftHeat;
           }
@@ -177,16 +193,40 @@ export default function GalleryPage() {
       setFilteredImages(sorted);
       setLoading(false);
     }, 300);
-  }, [selectedCategory, searchQuery, allImages, sortMode, clickCounts]);
+  }, [effectiveSelectedCategory, searchQuery, allImages, sortMode]);
 
   useEffect(() => {
-    if (selectedCategory !== '全部图片' && !categories.includes(selectedCategory)) {
-      setSelectedCategory('全部图片');
+    if (selectedCategory !== effectiveSelectedCategory) {
+      syncListStateToUrl(effectiveSelectedCategory, searchQuery, sortMode);
     }
-  }, [categories, selectedCategory]);
+  }, [effectiveSelectedCategory, searchQuery, selectedCategory, sortMode, syncListStateToUrl]);
+
+  const handleCategoryChange = (category: string) => {
+    setLoading(true);
+    setSelectedCategory(category);
+    syncListStateToUrl(category, searchQuery, sortMode);
+  };
+
+  const handleSearchQueryChange = (value: string) => {
+    setLoading(true);
+    setSearchQuery(value);
+    syncListStateToUrl(effectiveSelectedCategory, value, sortMode);
+  };
+
+  const handleSortModeChange = (value: SortMode) => {
+    setLoading(true);
+    setSortMode(value);
+    syncListStateToUrl(effectiveSelectedCategory, searchQuery, value);
+  };
+
+  const detailReturnPath = buildListUrl(effectiveSelectedCategory, searchQuery, sortMode);
+
+  useEffect(() => {
+    sessionStorage.setItem(GALLERY_RETURN_PATH_STORAGE_KEY, detailReturnPath);
+  }, [detailReturnPath]);
 
   const handleSearch = () => {
-    // 搜索按钮点击时触发，实际逻辑已经在 useEffect 中处理
+    syncListStateToUrl(effectiveSelectedCategory, searchQuery, sortMode);
   };
 
   return (
@@ -203,13 +243,13 @@ export default function GalleryPage() {
           {categories.map((category) => (
             <Button
               key={category}
-              variant={selectedCategory === category ? 'default' : 'outline'}
+              variant={effectiveSelectedCategory === category ? 'default' : 'outline'}
               className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                selectedCategory === category
+                effectiveSelectedCategory === category
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'hover:bg-gray-100'
               }`}
-              onClick={() => setSelectedCategory(category)}
+              onClick={() => handleCategoryChange(category)}
             >
               {category}
             </Button>
@@ -235,7 +275,7 @@ export default function GalleryPage() {
             placeholder="搜索图片名称..."
             className="min-w-48 flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchQueryChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 handleSearch();
@@ -251,7 +291,7 @@ export default function GalleryPage() {
           <select
             className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
             value={sortMode}
-            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            onChange={(e) => handleSortModeChange(e.target.value as SortMode)}
           >
             <option value="time-desc">时间（大到小）</option>
             <option value="time-asc">时间（小到大）</option>
@@ -279,11 +319,10 @@ export default function GalleryPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredImages.map((image) => (
-              <Link
-                key={image.id}
-                href={`/gallery/${encodeURIComponent(image.id)}`}
-              >
+            {filteredImages.map((image) => {
+              const detailHref = `/gallery/${encodeURIComponent(image.id)}?from=${encodeURIComponent(detailReturnPath)}`;
+              return (
+              <Link key={image.id} href={detailHref}>
                 <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow cursor-pointer h-full flex flex-col">
                   <div className="aspect-[3/4]">
                     <img
@@ -301,11 +340,12 @@ export default function GalleryPage() {
                     {image.status === 'sold-out' ? (
                       <p className="text-xs text-gray-400 mt-1">已售罄</p>
                     ) : null}
-                    <p className="text-xs text-gray-400 mt-1">热度：{clickCounts[image.id] ?? 0}</p>
+                    <p className="text-xs text-gray-400 mt-1">热度：{image.heat}</p>
                   </div>
                 </Card>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

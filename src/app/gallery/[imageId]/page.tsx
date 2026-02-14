@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   EMPTY_GALLERY_CONFIG,
   findGalleryImageById,
-  GALLERY_ADMIN_STORAGE_KEY,
-  GALLERY_CLICK_STORAGE_KEY,
+  GALLERY_RETURN_PATH_STORAGE_KEY,
   GalleryConfig,
   normalizeGalleryConfig,
 } from '@/lib/gallery';
@@ -15,11 +14,13 @@ import {
 export default function GalleryDetailPage() {
   const params = useParams<{ imageId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [galleryConfig, setGalleryConfig] = useState<GalleryConfig>(EMPTY_GALLERY_CONFIG);
   const [loading, setLoading] = useState(true);
   const [activeUrl, setActiveUrl] = useState('');
 
   const imageId = decodeURIComponent(params.imageId ?? '');
+  const from = searchParams.get('from');
 
   const currentImage = useMemo(
     () => findGalleryImageById(galleryConfig, imageId),
@@ -31,21 +32,13 @@ export default function GalleryDetailPage() {
       return;
     }
 
-    try {
-      const rawValue = localStorage.getItem(GALLERY_CLICK_STORAGE_KEY);
-      const parsed = rawValue ? (JSON.parse(rawValue) as Record<string, number>) : {};
-      const mapped: Record<string, number> = {};
-      for (const [id, count] of Object.entries(parsed)) {
-        if (Number.isFinite(count)) {
-          mapped[id] = count;
-        }
-      }
-
-      mapped[imageId] = (mapped[imageId] ?? 0) + 1;
-      localStorage.setItem(GALLERY_CLICK_STORAGE_KEY, JSON.stringify(mapped));
-    } catch {
-      // 忽略本地存储异常
-    }
+    void fetch('/api/gallery/heat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ imageId }),
+    });
   }, [imageId]);
 
   useEffect(() => {
@@ -53,7 +46,7 @@ export default function GalleryDetailPage() {
 
     const loadGalleryConfig = async () => {
       try {
-        const response = await fetch('/images/gallery.json', { cache: 'no-store' });
+        const response = await fetch('/gallery.json', { cache: 'no-store' });
         if (!response.ok) {
           return;
         }
@@ -64,17 +57,7 @@ export default function GalleryDetailPage() {
         }
 
         const normalized = normalizeGalleryConfig(data);
-        const rawOverride = localStorage.getItem(GALLERY_ADMIN_STORAGE_KEY);
-        let effectiveConfig = normalized;
-        if (rawOverride) {
-          try {
-            effectiveConfig = normalizeGalleryConfig(JSON.parse(rawOverride) as GalleryConfig);
-          } catch {
-            effectiveConfig = normalized;
-          }
-        }
-
-        setGalleryConfig(effectiveConfig);
+        setGalleryConfig(normalized);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -96,6 +79,21 @@ export default function GalleryDetailPage() {
     setActiveUrl(currentImage.shots[0] || currentImage.coverUrl);
   }, [currentImage]);
 
+  const handleBack = () => {
+    if (from) {
+      router.push(from);
+      return;
+    }
+
+    const storedFrom = sessionStorage.getItem(GALLERY_RETURN_PATH_STORAGE_KEY);
+    if (storedFrom) {
+      router.push(storedFrom);
+      return;
+    }
+
+    router.back();
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -110,7 +108,7 @@ export default function GalleryDetailPage() {
         <Button
           variant="outline"
           className="bg-white text-black hover:text-gray-500"
-          onClick={() => router.back()}
+          onClick={handleBack}
         >
           返回
         </Button>
@@ -126,7 +124,7 @@ export default function GalleryDetailPage() {
           <Button
             variant="outline"
             className="bg-white text-black hover:text-gray-500"
-            onClick={() => router.back()}
+            onClick={handleBack}
           >
             返回
           </Button>

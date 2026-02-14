@@ -1,0 +1,121 @@
+{
+  "updatedAt": "2026/02/14",
+  "groups": [
+    {
+      "category": "修钩",
+      "description": "修钩商品",
+      "updatedAt": "2026/02/14",
+      "images": [
+        {
+          "id": "修狗001",
+          "name": "修狗1号",
+          "uploadedAt": "2026/02/14",
+          "description": "修狗",
+          "coverUrl": "/images/00041-1770960161723.png",
+          "shots": [
+            "/images/00041-1770960161723.png",
+            "/images/00042-1770960161739.png",
+            "/images/00043-1770960161754.png",
+            "/images/00044-1770960161772.png",
+            "/images/00045-1770960161807.png"
+          ],
+          "status": "on",
+          "heat": 0
+        }
+      ]
+    },
+    {
+      "category": "修猫",
+      "description": "修猫商品",
+      "updatedAt": "2026/02/14",
+      "images": [
+        {
+          "id": "修猫001",
+          "name": "小猫1号",
+          "uploadedAt": "2026/02/14",
+          "description": "修猫猫",
+          "coverUrl": "/images/00031-1770954743735.png",
+          "shots": [
+            "/images/00031-1770954743735.png",
+            "/images/00032-1770954743756.png",
+            "/images/00033-1770954743776.png",
+            "/images/00034-1770954743798.png",
+            "/images/00035-1770954743835.png"
+          ],
+          "status": "on",
+          "heat": 0
+        }
+      ]
+    },
+    {
+      "category": "蜡笔小新",
+      "description": "蜡笔小新展示",
+      "updatedAt": "2026/02/12",
+      "images": [
+        {
+          "id": "plate-001",
+          "name": "左卫门",
+          "coverUrl": "/images/00001.png",
+          "uploadedAt": "2026/02/04",
+          "heat": 3,
+          "description": "左卫门展示",
+          "shots": [
+            "/images/00001.png",
+            "/images/00002.png",
+            "/images/00003.png"
+          ],
+          "status": "on"
+        },
+        {
+          "id": "plate-002",
+          "name": "小新",
+          "coverUrl": "/images/00011.png",
+          "uploadedAt": "2026/02/08",
+          "heat": 1,
+          "description": "小新展示",
+          "shots": [
+            "/images/00011.png",
+            "/images/00012.png",
+            "/images/00013.png",
+            "/images/00014.png"
+          ],
+          "status": "on"
+        }
+      ]
+    },
+    {
+      "category": "线条小狗",
+      "description": "线条小狗商品",
+      "updatedAt": "2026/02/14",
+      "images": [
+        {
+          "id": "线条002",
+          "name": "线条小狗2号",
+          "uploadedAt": "2026/02/14",
+          "description": "线条小狗2号",
+          "coverUrl": "/images/00023-1770953894578.png",
+          "shots": [
+            "/images/00023-1770953894578.png",
+            "/images/00024-1770953894589.png",
+            "/images/00025-1770953894614.png"
+          ],
+          "status": "on",
+          "heat": 0
+        },
+        {
+          "id": "线条001",
+          "name": "线条小狗1号",
+          "uploadedAt": "2026/02/14",
+          "description": "线条小狗",
+          "coverUrl": "/images/00021-1770953894554.png",
+          "shots": [
+            "/images/00021-1770953894554.png",
+            "/images/00022-1770953894567.png"
+          ],
+          "status": "on",
+          "heat": 0
+        }
+      ]
+    }
+  ]
+}

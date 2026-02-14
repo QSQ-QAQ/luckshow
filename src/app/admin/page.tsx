@@ -13,7 +13,6 @@ import {
   GalleryConfig,
   GalleryImage,
   GalleryImageStatus,
-  GALLERY_ADMIN_STORAGE_KEY,
   normalizeDateString,
   normalizeGalleryConfig,
 } from '@/lib/gallery';
@@ -144,6 +143,14 @@ export default function AdminPage() {
     () => config.groups.map((group) => ({ category: group.category, count: group.images.length })),
     [config]
   );
+  const formCategoryOptions = useMemo(() => {
+    const categorySet = new Set(categorySummaries.map((item) => item.category));
+    const currentCategory = form.category.trim();
+    if (currentCategory) {
+      categorySet.add(currentCategory);
+    }
+    return Array.from(categorySet);
+  }, [categorySummaries, form.category]);
   const usedImageUrlSet = useMemo(() => {
     const usedUrls = new Set<string>();
     for (const group of config.groups) {
@@ -226,29 +233,17 @@ export default function AdminPage() {
 
     const init = async () => {
       try {
-        const response = await fetch('/images/gallery.json', { cache: 'no-store' });
+        const response = await fetch('/api/gallery-config', { cache: 'no-store' });
         if (!response.ok) {
           return;
         }
 
         const data = (await response.json()) as GalleryConfig;
-        const normalizedBase = normalizeGalleryConfig(data);
         if (!mounted) {
           return;
         }
 
-        const raw = localStorage.getItem(GALLERY_ADMIN_STORAGE_KEY);
-        if (!raw) {
-          setConfig(normalizedBase);
-          return;
-        }
-
-        try {
-          const parsed = JSON.parse(raw) as GalleryConfig;
-          setConfig(normalizeGalleryConfig(parsed));
-        } catch {
-          setConfig(normalizedBase);
-        }
+        setConfig(normalizeGalleryConfig(data));
       } catch {
         if (!mounted) {
           return;
@@ -268,10 +263,21 @@ export default function AdminPage() {
     };
   }, []);
 
-  const persistConfig = (nextConfig: GalleryConfig) => {
+  const persistConfig = async (nextConfig: GalleryConfig) => {
     const normalized = normalizeGalleryConfig(nextConfig);
     setConfig(normalized);
-    localStorage.setItem(GALLERY_ADMIN_STORAGE_KEY, JSON.stringify(normalized, null, 2));
+
+    const response = await fetch('/api/gallery-config', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(normalized),
+    });
+
+    if (!response.ok) {
+      throw new Error('保存配置失败');
+    }
   };
 
   const clearCategoryLongPress = () => {
@@ -299,7 +305,7 @@ export default function AdminPage() {
     }
   };
 
-  const saveForm = () => {
+  const saveForm = async () => {
     const targetId = form.id.trim();
     const targetName = form.name.trim();
     const targetCategory = form.category.trim();
@@ -324,7 +330,13 @@ export default function AdminPage() {
       return;
     }
 
-    const image = formToImage(form);
+    const sourceImage = config.groups
+      .flatMap((group) => group.images)
+      .find((item) => item.id === sourceImageId);
+    const image = {
+      ...formToImage(form),
+      heat: sourceImage?.heat ?? 0,
+    };
     const nextGroups = config.groups.map((group) => ({
       ...group,
       images: group.images.filter((item) => item.id !== form.sourceImageId),
@@ -352,7 +364,7 @@ export default function AdminPage() {
     };
 
     try {
-      persistConfig(nextConfig);
+      await persistConfig(nextConfig);
       setSelectedCategory(targetCategory);
       setSelectedImageId('');
       setForm({
@@ -383,7 +395,7 @@ export default function AdminPage() {
       }),
     }));
 
-    persistConfig({
+    void persistConfig({
       updatedAt: getTodayText(),
       groups: nextGroups,
     });
@@ -405,7 +417,7 @@ export default function AdminPage() {
       return;
     }
 
-    persistConfig({
+    void persistConfig({
       updatedAt: getTodayText(),
       groups: [
         {
@@ -477,7 +489,7 @@ export default function AdminPage() {
     const [movingGroup] = nextGroups.splice(fromIndex, 1);
     nextGroups.splice(toIndex, 0, movingGroup);
 
-    persistConfig({
+    void persistConfig({
       updatedAt: getTodayText(),
       groups: nextGroups,
     });
@@ -531,7 +543,7 @@ export default function AdminPage() {
       };
     });
 
-    persistConfig({
+    void persistConfig({
       updatedAt: getTodayText(),
       groups: nextGroups,
     });
@@ -570,7 +582,7 @@ export default function AdminPage() {
     }
 
     const nextGroups = config.groups.filter((group) => group.category !== sourceName);
-    persistConfig({
+    void persistConfig({
       updatedAt: getTodayText(),
       groups: nextGroups,
     });
@@ -928,23 +940,24 @@ export default function AdminPage() {
                     value={form.name}
                     onChange={(event) => setForm((previous) => ({ ...previous, name: event.target.value }))}
                   />
-                  <Input
-                    list="category-options"
-                    placeholder="分类（必填）"
+                  <select
+                    className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                     value={form.category}
                     onChange={(event) => setForm((previous) => ({ ...previous, category: event.target.value }))}
-                  />
+                  >
+                    <option value="" disabled>请选择分类（必填）</option>
+                    {formCategoryOptions.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
                   <Input
                     placeholder="日期，例如 2026/02/13"
                     value={form.uploadedAt}
                     onChange={(event) => setForm((previous) => ({ ...previous, uploadedAt: event.target.value }))}
                   />
                 </div>
-                <datalist id="category-options">
-                  {categorySummaries.map((item) => (
-                    <option key={item.category} value={item.category} />
-                  ))}
-                </datalist>
               </div>
 
               <div className="rounded-lg border p-3">
